@@ -70,7 +70,7 @@ class BolsaDeValores:
 
     def sync_clocks(self):
         while True:
-            time.sleep(60)  # Ajuste este valor para determinar a frequência de sincronização dos relógios
+            time.sleep(10)  # Ajuste este valor para determinar a frequência de sincronização dos relógios
             times = []
             for conn in self.conexoes:
                 conn.sendall(json.dumps({"action": "get_time"}).encode())
