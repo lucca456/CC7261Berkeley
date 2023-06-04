@@ -1,91 +1,136 @@
 import time
+import logging
 import random
-import socket
 import threading
-import json
+import requests
+from flask import Flask, request, jsonify
+import sys
+
+# Cores
+VERDE = '\033[32m'
+VERMELHO = '\033[31m'
+AMARELO = '\033[33m'
+MAGENTA = '\033[35m'
+CIANO = '\033[36m'
+RESET = '\033[0m'
+
+logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
+logger = logging.getLogger()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S')
+handler = logger.handlers[0]
+handler.setFormatter(formatter)
+
+app = Flask(__name__)
 
 class BolsaDeValores:
-    def __init__(self, host="localhost", port=12345):
+    def __init__(self):
         self.relogio = time.time()
         self.acoes = {
-            "A1": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2)},
-            "A2": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2)},
-            "A3": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2)},
-            "A4": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2)},
+            "A1": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A2": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A3": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A4": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A5": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A6": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A7": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0},
+            "A8": {'quantidade': random.randint(50, 100), 'valor': round(random.uniform(10.0, 100.0), 2), 'disponivel_para_venda': 0}
         }
-        self.host = host
-        self.port = port
-        self.conexoes = []
+        threading.Thread(target=self.start_consuming).start()
 
-    def obtem_acao(self, nome):
-        if nome in self.acoes:
-            return self.acoes[nome]
-
-    def lista_acoes(self):
-        return self.acoes
-
-    def processa_pedido(self, nome, tipo, quantidade):
-        if nome in self.acoes and self.acoes[nome]["quantidade"] >= quantidade:
-            if tipo == "compra":
-                self.acoes[nome]["quantidade"] -= quantidade
-            elif tipo == "venda":
-                self.acoes[nome]["quantidade"] += quantidade
-            return True
-        else:
-            return False
-
-    def run(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((self.host, self.port))
-            s.listen()
-            print(f"Servidor iniciado em {self.host}:{self.port}. Aguardando conexões...")
-            
-            # Inicia a sincronização dos relógios em um thread separado
-            threading.Thread(target=self.sync_clocks).start()
-            
-            while True:
-                conn, addr = s.accept()
-                self.conexoes.append(conn)
-                threading.Thread(target=self.handle_client, args=(conn, addr)).start()
-
-
-    def handle_client(self, conn, addr):
-        print(f"Conexão estabelecida com {addr}")
+    def start_consuming(self):
+        logger.info(AMARELO + f'[...] BV aguardando mensagens...' + RESET)
         while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            request = json.loads(data.decode())
-            if request["action"] == "get_time":
-                conn.sendall(json.dumps(self.relogio).encode())
-            elif request["action"] == "set_time":
-                self.relogio = request["time"]
-            elif request["action"] == "get_stock":
-                conn.sendall(json.dumps(self.obtem_acao(request["stock"])).encode())
-            elif request["action"] == "get_all_stocks":
-                conn.sendall(json.dumps(self.lista_acoes()).encode())
-            elif request["action"] == "process_order":
-                result = self.processa_pedido(request["stock"], request["type"], request["quantity"])
-                conn.sendall(json.dumps(result).encode())
+            time.sleep(10)
+            self.atualizar_relogio()
 
-    def sync_clocks(self):
+    def enviar_acoes(self, hb_id):
+        logger.info(MAGENTA + f'[*] Lista de ações enviada da BV ao {hb_id}' + RESET)
+        try:
+            response = requests.post(f'http://{hb_id}/acoes', json=self.acoes)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.info(VERMELHO + f'[!] Falha ao enviar ações para {hb_id}: {e}' + RESET)
+
+    @app.route('/pedido', methods=['POST'])
+    def handle_message(self):
+        try:
+            pedido = request.get_json()
+            if "Sincronizar" in pedido:
+                label, tempo_hb, hb_id = pedido.split(',')
+                self.sincronizar_relogio(tempo_hb, hb_id)
+            elif "Lista" in pedido:
+                label, hb_id = pedido.split(',')
+                self.enviar_acoes(hb_id)
+            elif pedido:
+                nome_acao, operacao, quantidade, relogio_hb, hb_id = pedido.split(',')
+                quantidade = int(quantidade)
+                relogio_hb = float(relogio_hb)
+                hb_id = str(hb_id)
+                if relogio_hb > self.relogio + 2 or relogio_hb < self.relogio - 2:
+                    logger.info(CIANO + f'[#] Sincronizar enviado da BV ao {hb_id} .' + RESET)
+                    try:
+                        response = requests.post(f'http://{hb_id}/sincronizar', json={'tempo': self.relogio})
+                        response.raise_for_status()
+                    except requests.exceptions.RequestException as e:
+                        logger.info(VERMELHO + f'[!] Falha ao enviar sincronização para {hb_id}: {e}' + RESET)
+                self.processar_pedido(nome_acao, operacao, quantidade, hb_id)
+        except Exception as e:
+            logger.info(VERMELHO + f'[!] Erro em \'handle_message\' no BV: {e}' + RESET)
+            return jsonify({'status': 'error', 'message': f'Erro em \'handle_message\' no BV: {e}'}), 400
+
+    def processar_pedido(self, nome_acao, operacao, quantidade, hb_id):
+        try:
+            if nome_acao not in self.acoes:
+                return logger.info(VERMELHO + f'[$] A ação {nome_acao} não existe !' + RESET)
+            if operacao not in ['compra', 'venda']:
+                return logger.info(VERMELHO + f'[$] A operação {operacao} é inválida. As operações válidas são \'compra\' e \'venda\' !' + RESET)
+            acao = self.acoes[nome_acao]
+            if operacao == 'compra':
+                if quantidade > acao['quantidade']:
+                    return logger.info(VERMELHO + f"[$] A quantidade a ser comprada {quantidade} é maior do que a quantidade disponível {acao['quantidade']} para {nome_acao} !" + RESET)
+                acao['quantidade'] -= quantidade
+                acao['disponivel_para_venda'] += quantidade
+                acao['valor'] = round(acao['valor'] * 1.01, 2)
+            elif operacao == 'venda':
+                if quantidade > acao['disponivel_para_venda']:
+                    return logger.info(VERMELHO + f"[$] A quantidade a ser vendida {quantidade} é maior do que a quantidade disponível para venda {acao['disponivel_para_venda']} para {nome_acao} !" + RESET)
+                acao['disponivel_para_venda'] -= quantidade
+                acao['quantidade'] += quantidade
+                acao['valor'] = round(acao['valor'] * 0.99, 2)
+            logger.info(VERDE + f"[#] Pedido de {operacao} de {quantidade} ações de {nome_acao} processado com sucesso !" + RESET)
+        except Exception as e:
+            logger.info(VERMELHO + f'[!] Erro em \'processar_pedido\' no BV: {e}' + RESET)
+
+    def sincronizar_relogio(self, tempo_hb, hb_id):
+        try:
+            logger.info(CIANO + f'[#] Sincronização recebida da {hb_id} .' + RESET)
+            self.relogio = (self.relogio + float(tempo_hb)) / 2
+            logger.info(CIANO + f'[#] Sincronização efetuada com sucesso com o {hb_id} .' + RESET)
+        except Exception as e:
+            logger.info(VERMELHO + f'[!] Erro em \'sincronizar_relogio\' no BV: {e}' + RESET)
+
+    def atualizar_relogio(self):
+        try:
+            self.relogio = time.time()
+            logger.info(VERDE + f"[#] Relógio da BV atualizado para: {self.relogio}" + RESET)
+        except Exception as e:
+            logger.info(VERMELHO + f'[!] Erro em \'atualizar_relogio\' no BV: {e}' + RESET)
+
+    def start_consuming(self):
+        logger.info(AMARELO + f'[...] BV aguardando mensagens...' + RESET)
         while True:
-            time.sleep(10)  # Ajuste este valor para determinar a frequência de sincronização dos relógios
-            times = []
-            for conn in self.conexoes:
-                conn.sendall(json.dumps({"action": "get_time"}).encode())
-                data = conn.recv(1024)
-                if data:
-                    client_time = json.loads(data.decode())
-                    times.append(client_time)
+            time.sleep(10)
+            self.atualizar_relogio()
 
-            if times:
-                avg_time = sum(times) / len(times)
-                self.relogio = avg_time
+    def enviar_acoes(self, hb_id):
+        logger.info(MAGENTA + f'[*] Lista de ações enviada da BV ao {hb_id}' + RESET)
+        try:
+            response = requests.post(f'http://{hb_id}/acoes', json=self.acoes)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.info(VERMELHO + f'[!] Falha ao enviar ações para {hb_id}: {e}' + RESET)
 
-                for conn in self.conexoes:
-                    conn.sendall(json.dumps({"action": "set_time", "time": avg_time}).encode())
+if __name__ == '__main__':
+    BolsaDeValores()
+    app.run(port=5001)
 
-if __name__ == "__main__":
-    bolsa = BolsaDeValores()
-    bolsa.run()
