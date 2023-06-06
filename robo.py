@@ -5,14 +5,6 @@ import sys
 import threading
 import requests
 
-# Cores
-VERDE = '\033[32m'
-VERMELHO = '\033[31m'
-AMARELO = '\033[33m'
-MAGENTA = '\033[35m'
-CIANO = '\033[36m'
-RESET = '\033[0m'
-
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger()
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S')

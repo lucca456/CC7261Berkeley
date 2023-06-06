@@ -3,16 +3,8 @@ import requests
 import time
 import sys
 import logging
-import random
 import threading
 
-# Cores
-VERDE = '\033[32m'
-VERMELHO = '\033[31m'
-AMARELO = '\033[33m'
-MAGENTA = '\033[35m'
-CIANO = '\033[36m'
-RESET = '\033[0m'
 
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger()
@@ -38,24 +30,24 @@ class HomeBroker:
         self.relogio = nova_hora
 
     def get_acoes(self):
-        # try:
-        response = requests.get(f"http://{self.bv_host}/acoes")
-        response.raise_for_status()
-        self.acoes = response.json()
-        # except requests.exceptions.RequestException as e:
-            # logger.error(f"Erro ao obter a lista de ações: {e}")
+        try:
+            response = requests.get(f"http://{self.bv_host}/acoes")
+            response.raise_for_status()
+            self.acoes = response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao obter a lista de ações: {e}")
 
     def comprar_acao(self, acao, quantidade):
-        # try:
-        data = {'acao': acao, 'quantidade': quantidade}
-        response = requests.post(f"http://{self.bv_host}/comprar", json=data)
-        response.raise_for_status()
-        mensagem = response.json()
-        logger.info(mensagem)
-        # Registrar o resultado da operação no log
-        logger.info(f"Compra realizada - Ação: {acao} - Quantidade: {quantidade}")
-        # except requests.exceptions.RequestException as e:
-        #     logger.error(f"Erro ao realizar compra de ação: {e}")
+        try:
+            data = {'acao': acao, 'quantidade': quantidade}
+            response = requests.post(f"http://{self.bv_host}/comprar", json=data)
+            response.raise_for_status()
+            mensagem = response.json()
+            logger.info(mensagem)
+            # Registrar o resultado da operação no log
+            logger.info(f"Compra realizada - Ação: {acao} - Quantidade: {quantidade}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao realizar compra de ação: {e}")
         return mensagem
 
     def vender_acao(self, acao, quantidade):
@@ -121,16 +113,14 @@ def vender_acao():
     requisicao = request.get_json()
     acao = requisicao.get('acao')
     quantidade = requisicao.get('quantidade')
-    hb.vender_acao(acao, quantidade)
-    return ''
+    return hb.vender_acao(acao, quantidade)
 
 @app.route('/sincronizar', methods=['POST'])
 def sincronizar_relogio_hb():
     requisicao = request.get_json()
     relogio_hb = requisicao.get('relogio')
     # Atualize o relógio do HB com o valor recebido
-    hb.atualizar_hora(relogio_hb)
-    return ''
+    return hb.atualizar_hora(relogio_hb)
 
 @app.route('/atualizar_acoes', methods=['POST'])
 def atualizar_acoes():
@@ -144,8 +134,7 @@ def atualizar_acoes():
 def analisar_pedido():
     requisicao = request.get_json()
     pedido = requisicao.get('pedido')
-    hb.analisar_pedido(pedido)
-    return ''
+    return hb.analisar_pedido(pedido)
 
 
 if __name__ == "__main__":

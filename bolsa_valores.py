@@ -1,21 +1,15 @@
 import time
 import logging
-import random
 import threading
 from flask import Flask, request, jsonify
 import sys
 import requests
 
-# Cores
-VERDE = '\033[32m'
-VERMELHO = '\033[31m'
-AMARELO = '\033[33m'
-MAGENTA = '\033[35m'
-CIANO = '\033[36m'
-RESET = '\033[0m'
-
-logging.basicConfig(filename='log_bv.txt', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S')
+handler = logger.handlers[0]
+handler.setFormatter(formatter)
 
 app = Flask(__name__)
 
@@ -23,18 +17,18 @@ class BolsaDeValores:
     def __init__(self):
         self.relogio = time.time()
         self.acoes = {
-            "A1": {'quantidade': 10, 'valor': 10},
-            "A2": {'quantidade': 10, 'valor': 10},
-            "A3": {'quantidade': 10, 'valor': 10},
-            "A4": {'quantidade': 10, 'valor': 10},
-            "A5": {'quantidade': 10, 'valor': 10},
-            "A6": {'quantidade': 10, 'valor': 10},
-            "A7": {'quantidade': 10, 'valor': 10},
-            "A8": {'quantidade': 10, 'valor': 10}
+            "A1": {'quantidade': 100, 'valor': 10},
+            "A2": {'quantidade': 100, 'valor': 10},
+            "A3": {'quantidade': 100, 'valor': 10},
+            "A4": {'quantidade': 100, 'valor': 10},
+            "A5": {'quantidade': 100, 'valor': 10},
+            "A6": {'quantidade': 100, 'valor': 10},
+            "A7": {'quantidade': 100, 'valor': 10},
+            "A8": {'quantidade': 100, 'valor': 10}
         }
 
     def sincronizar_relogio(self):
-        logging.info('Início da sincronização')
+        logger.info('Início da sincronização')
         hora_antes = time.time()
 
         # Obter a hora dos sistemas de HB
@@ -46,8 +40,8 @@ class BolsaDeValores:
 
         hora_depois = time.time()
 
-        logging.info(f'Hora antes da sincronização: {hora_antes}')
-        logging.info(f'Hora depois da sincronização: {hora_depois}')
+        logger.info(f'Hora antes da sincronização: {hora_antes}')
+        logger.info(f'Hora depois da sincronização: {hora_depois}')
         
     def obter_hora_hb(self, hb_url):
         try:
@@ -77,7 +71,7 @@ def comprar_acoes():
     quantidade = requisicao.get('quantidade')
 
     tempo_pedido = time.time()
-    logging.info(f'Hora do pedido: {tempo_pedido}')
+    logger.info(f'Hora do pedido: {tempo_pedido}')
 
     diferenca_tempo = tempo_pedido - bolsa.relogio
 
@@ -103,7 +97,7 @@ def vender_acoes():
     quantidade = requisicao.get('quantidade')
 
     tempo_pedido = time.time()
-    logging.info(f'Hora do pedido: {tempo_pedido}')
+    logger.info(f'Hora do pedido: {tempo_pedido}')
 
     diferenca_tempo = tempo_pedido - bolsa.relogio
 
