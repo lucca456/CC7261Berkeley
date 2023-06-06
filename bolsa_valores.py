@@ -31,7 +31,7 @@ class BolsaDeValores:
         self.thread_relogio = threading.Thread(target=self.atualizar_relogio_continuamente)
         self.thread_relogio.start()
 
-        self.hb_urls = ['localhost:8080', 'localhost:8081']
+        self.hb_urls = ['localhost:8080']
 
     def sincronizar_relogio(self):
         logger.info('Início da sincronização')
