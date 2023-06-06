@@ -45,5 +45,5 @@ A execução do projeto em um ambiente local permite aos usuários explorar o fu
 Este projeto serve como uma excelente base para futuros projetos relacionados à simulação de bolsas de valores e a sistemas distribuídos em geral. Ele pode ser expandido e adaptado para incluir mais funcionalidades e para simular cenários mais complexos.
 
 ## INTEGRANTES
-Lucca Bonsi Guarreschi / 22.120.016-5
+Lucca Bonsi Guarreschi / 22.120.016-5  
 João Vitor de Souza Lisboa / 22.120.082-7
