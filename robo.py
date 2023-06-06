@@ -34,7 +34,7 @@ class Robo:
         threading.Thread(target=self.realizar_operacao).start()
 
     def solicita_lista(self):
-        logger.info(MAGENTA + f'[*] Robo{self.robo_id} solicitando lista de ações ao HB{self.hb_id}...' + RESET)
+        logger.info(MAGENTA + f'Robo{self.robo_id} solicitando lista de ações ao HB{self.hb_id}...' + RESET)
         pedido_bv = f"LRobo,robo{self.robo_id}"
         requests.post(f'http://{self.host}/hb{self.hb_id}', data=pedido_bv)
 
@@ -42,15 +42,15 @@ class Robo:
         try:
             pedido = body.decode('utf-8')
             if "Lista" in pedido:
-                logger.info(MAGENTA + f'[*] Lista de ações recebida no Robo{self.robo_id} !' + RESET)
+                logger.info(MAGENTA + f'Lista de ações recebida no Robo{self.robo_id} !' + RESET)
                 label, acoes, hb_id = pedido.split(';')
                 self.acoes = eval(acoes)
-                logger.info(MAGENTA + f'[*] Ações recebidas de {hb_id}: ' + RESET)
+                logger.info(MAGENTA + f'Ações recebidas de {hb_id}: ' + RESET)
                 for acao, info in self.acoes.items():
-                    logger.info(MAGENTA + f'[$] {acao}: {info}'+ RESET)
+                    logger.info(MAGENTA + f'{acao}: {info}'+ RESET)
                 self.recebeu_acoes = True
         except Exception as e:
-            logger.info(VERMELHO + f'[!] Erro em \'handle_message\' no Robo{self.robo_id}: {e}' + RESET)
+            logger.info(VERMELHO + f'Erro em \'handle_message\' no Robo{self.robo_id}: {e}' + RESET)
 
     def realizar_operacao(self):
         try:
@@ -72,10 +72,10 @@ class Robo:
                             continue
                         pedido = f"{nome_acao},{operacao},{quantidade},robo{self.robo_id}"
                         requests.post(f'http://{self.host}/hb{self.hb_id}', data=pedido)
-                        logger.info(VERDE + f"[$] Pedido de {operacao} de {quantidade} {nome_acao} encaminhado ao HB{self.hb_id} com sucesso !" + RESET)
+                        logger.info(VERDE + f"Pedido de {operacao} de {quantidade} {nome_acao} encaminhado ao HB{self.hb_id} com sucesso !" + RESET)
                         self.solicita_lista()
         except Exception as e:
-            logger.info(VERMELHO + f'[!] Erro em \'realizar_operacao\' no Robo{self.robo_id}: {e}' + RESET)
+            logger.info(VERMELHO + f'Erro em \'realizar_operacao\' no Robo{self.robo_id}: {e}' + RESET)
         
 
 if __name__ == "__main__":
