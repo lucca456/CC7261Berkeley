@@ -23,91 +23,130 @@ handler.setFormatter(formatter)
 app = Flask(__name__)
 
 class HomeBroker:
-    def __init__(self, host='localhost:5001', hb_id=0):
+    def __init__(self, host='localhost:8080', bv_host='localhost:5001', hb_id=0):
         self.host = host
+        self.bv_host = bv_host
         self.hb_id = hb_id
         self.robo_id = 'robo1'
         self.acoes = {}
         self.relogio = time.time()
-        threading.Thread(target=self.start_consuming).start()
 
-    def start_consuming(self):
-        while True:
-            try:
-                logger.info(AMARELO + f'HB{self.hb_id} aguardando mensagens...' + RESET)
-                response = requests.get(f'http://{self.host}/hb{self.hb_id}')
-                response.raise_for_status()
-                self.handle_message(response.text)
-            except Exception as e:
-                logger.info(VERMELHO + f'Erro em \'start_consuming\' no HB{self.hb_id}: {e}' + RESET)
-                time.sleep(5)  # tente novamente após um atraso
+    def obter_hora_atual(self):
+        self.relogio = time.time()
 
-    def solicita_lista(self):
-        logger.info(MAGENTA + f'HB{self.hb_id} solicitando lista de ações a BV...' + RESET)
-        pedido_bv = f"Lista,hb{self.hb_id}"
-        requests.post(f'http://{self.host}/exchange_bv/bv', data=pedido_bv)
+    def atualizar_hora(self, nova_hora):
+        self.relogio = nova_hora
 
-    def repassa_lista(self):
-        lista_acoes = f"Lista;{self.acoes};hb{self.hb_id}"
-        requests.post(f'http://{self.host}/exchange_robos/{self.robo_id}', data=lista_acoes)
-        logger.info(MAGENTA + f'Lista de ações enviada pelo HB{self.hb_id} ao {self.robo_id} !' + RESET)
+    def get_acoes(self):
+        # try:
+        response = requests.get(f"http://{self.bv_host}/acoes")
+        response.raise_for_status()
+        self.acoes = response.json()
+        # except requests.exceptions.RequestException as e:
+            # logger.error(f"Erro ao obter a lista de ações: {e}")
 
-    def handle_message(self, message):
+    def comprar_acao(self, acao, quantidade):
+        # try:
+        data = {'acao': acao, 'quantidade': quantidade}
+        response = requests.post(f"http://{self.bv_host}/comprar", json=data)
+        response.raise_for_status()
+        mensagem = response.json()
+        logger.info(mensagem)
+        # Registrar o resultado da operação no log
+        logger.info(f"Compra realizada - Ação: {acao} - Quantidade: {quantidade}")
+        # except requests.exceptions.RequestException as e:
+        #     logger.error(f"Erro ao realizar compra de ação: {e}")
+        return mensagem
+
+    def vender_acao(self, acao, quantidade):
         try:
-            pedido = message
-            if "Lista" in pedido:
-                logger.info(MAGENTA + f'Lista de ações recebida da BV no HB{self.hb_id} !' + RESET)
-                label, acoes = pedido.split(';')
-                self.acoes = eval(acoes)
-                self.repassa_lista()
-            elif "LRobo" in pedido:
-                label, robo_id = pedido.split(',')
-                logger.info(MAGENTA + f'{robo_id} solicitou a lista de ações .' + RESET)
-                self.robo_id = robo_id
-                self.solicita_lista()
-            elif "Sincronizar" in pedido:
-                logger.info(CIANO + 'Iniciando sincronização com a BV...' + RESET)
-                label, tempo_bv = pedido.split(',')
-                self.sincronizar_relogio(tempo_bv)
-            elif pedido:
-                nome_acao, operacao, quantidade, robo_id = pedido.split(',')
-                quantidade = int(quantidade)
-                self.realiza_operacao(nome_acao, operacao, quantidade, robo_id)
-        except Exception as e:
-            logger.info(VERMELHO + f'Erro em \'handle_message\' no HB{self.hb_id}: {e}' + RESET)
+            data = {'acao': acao, 'quantidade': quantidade}
+            response = requests.post(f"http://{self.bv_host}/vender", json=data)
+            response.raise_for_status()
+            mensagem = response.json()['mensagem']
+            logger.info(mensagem)
+            # Registrar o resultado da operação no log
+            logger.info(f"Venda realizada - Ação: {acao} - Quantidade: {quantidade}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao realizar venda de ação: {e}")
 
-    def realiza_operacao(self, nome_acao, operacao, quantidade, robo_id):
-        if operacao == 'Venda':
-            self.vende_acao(nome_acao, quantidade, robo_id)
-        elif operacao == 'Compra':
-            self.compra_acao(nome_acao, quantidade, robo_id)
+    def analisar_pedido(self, pedido):
+        acao = pedido.get('acao')
+        quantidade = pedido.get('quantidade')
+        if pedido.get('tipo') == 'compra':
+            self.comprar_acao(acao, quantidade)
+        elif pedido.get('tipo') == 'venda':
+            self.vender_acao(acao, quantidade)
+        else:
+            logger.error(f"Tipo de pedido inválido: {pedido}")
 
-    def compra_acao(self, nome_acao, quantidade, robo_id):
-        logger.info(CIANO + f'{robo_id} solicitando a compra de {quantidade} ações de {nome_acao}...' + RESET)
-        pedido_bv = f"Compra,{nome_acao},{quantidade},hb{self.hb_id}"
-        requests.post(f'http://{self.host}/exchange_bv/bv', data=pedido_bv)
+    def sincronizar_relogio(self):
+        try:
+            response = requests.post(f"http://{self.bv_host}/sincronizar", json={'relogio': self.relogio})
+            response.raise_for_status()
+            relogio_bv = response.json().get('relogio')
+            self.atualizar_hora(relogio_bv)
+            # Registrar no log o início e fim da sincronização
+            logger.info(f"Início da sincronização - Relógio HB: {self.relogio}")
+            logger.info(f"Fim da sincronização - Relógio HB: {self.relogio}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao sincronizar relógio com a BV: {e}")
 
-    def vende_acao(self, nome_acao, quantidade, robo_id):
-        logger.info(CIANO + f'{robo_id} solicitando a venda de {quantidade} ações de {nome_acao}...' + RESET)
-        pedido_bv = f"Venda,{nome_acao},{quantidade},hb{self.hb_id}"
-        requests.post(f'http://{self.host}/exchange_bv/bv', data=pedido_bv)
+    def atualizar_informacoes_acoes(self):
+        try:
+            response = requests.post(f"http://{self.bv_host}/atualizar_acoes", json={'acoes': self.acoes})
+            response.raise_for_status()
+            acoes_atualizadas = response.json().get('acoes')
+            self.acoes = acoes_atualizadas
+            logger.info("Informações das ações atualizadas com sucesso")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao atualizar informações das ações: {e}")
 
-    def sincronizar_relogio(self, tempo_bv):
-        self.relogio = time.time() - float(tempo_bv)
-        logger.info(CIANO + f'Relógio sincronizado com a BV!' + RESET)
+hb = HomeBroker()
 
-hb1 = HomeBroker(hb_id=1)
-hb2 = HomeBroker(hb_id=2)
+@app.route('/acoes', methods=['GET'])
+def listar_acoes():
+    hb.get_acoes()
+    return jsonify(hb.acoes)
 
-@app.route('/hb1', methods=['POST'])
-def hb1_route():
-    hb1.handle_message(request.data.decode())
-    return 'OK', 200
+@app.route('/comprar', methods=['POST'])
+def comprar_acao():
+    requisicao = request.get_json()
+    acao = requisicao.get('acao')
+    quantidade = requisicao.get('quantidade')
+    return hb.comprar_acao(acao, quantidade)
 
-@app.route('/hb2', methods=['POST'])
-def hb2_route():
-    hb2.handle_message(request.data.decode())
-    return 'OK', 200
+@app.route('/vender', methods=['POST'])
+def vender_acao():
+    requisicao = request.get_json()
+    acao = requisicao.get('acao')
+    quantidade = requisicao.get('quantidade')
+    hb.vender_acao(acao, quantidade)
+    return ''
+
+@app.route('/sincronizar', methods=['POST'])
+def sincronizar_relogio_hb():
+    requisicao = request.get_json()
+    relogio_hb = requisicao.get('relogio')
+    # Atualize o relógio do HB com o valor recebido
+    hb.atualizar_hora(relogio_hb)
+    return ''
+
+@app.route('/atualizar_acoes', methods=['POST'])
+def atualizar_acoes():
+    requisicao = request.get_json()
+    acoes_atualizadas = requisicao.get('acoes')
+    # Atualize as informações das ações do HB de acordo com as ações atualizadas da BV
+    hb.acoes = acoes_atualizadas
+    return ''
+
+@app.route('/pedido', methods=['POST'])
+def analisar_pedido():
+    requisicao = request.get_json()
+    pedido = requisicao.get('pedido')
+    hb.analisar_pedido(pedido)
+    return ''
+
 
 if __name__ == "__main__":
-    app.run(host='localhost', port=5001)
+    app.run(host='localhost', port=8080)

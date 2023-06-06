@@ -20,66 +20,59 @@ handler = logger.handlers[0]
 handler.setFormatter(formatter)
 
 class Robo:
-    def __init__(self, hb_id='1', robo_id='1', host='localhost'):
-        self.hb_id = hb_id
-        self.robo_id = robo_id
-        self.acoes = {}
-        self.acoes_possuidas = {}
-        self.recebeu_acoes = False
-        self.conectado = False
-        self.relogio = time.time()
-        self.host = host
-        time.sleep(5)
-        self.solicita_lista()
-        threading.Thread(target=self.realizar_operacao).start()
+    def __init__(self, hb_url='http://localhost:8080'):
+        self.hb_url = hb_url
 
-    def solicita_lista(self):
-        logger.info(MAGENTA + f'Robo{self.robo_id} solicitando lista de ações ao HB{self.hb_id}...' + RESET)
-        pedido_bv = f"LRobo,robo{self.robo_id}"
-        requests.post(f'http://{self.host}/hb{self.hb_id}', data=pedido_bv)
-
-    def handle_message(self, body):
+    def tomar_decisao_compra_venda(self):
         try:
-            pedido = body.decode('utf-8')
-            if "Lista" in pedido:
-                logger.info(MAGENTA + f'Lista de ações recebida no Robo{self.robo_id} !' + RESET)
-                label, acoes, hb_id = pedido.split(';')
-                self.acoes = eval(acoes)
-                logger.info(MAGENTA + f'Ações recebidas de {hb_id}: ' + RESET)
-                for acao, info in self.acoes.items():
-                    logger.info(MAGENTA + f'{acao}: {info}'+ RESET)
-                self.recebeu_acoes = True
+            acoes = self.get_acoes_disponiveis()
+            if acoes:
+                acao = random.choice(acoes)
+                quantidade = random.randint(1, acoes[acao]['quantidade'])
+                if random.choice([True, False]):  # Decisão aleatória de comprar ou vender
+                    self.realizar_compra(acao, quantidade)
+                else:
+                    self.realizar_venda(acao, quantidade)
         except Exception as e:
-            logger.info(VERMELHO + f'Erro em \'handle_message\' no Robo{self.robo_id}: {e}' + RESET)
+            logger.error(f"Erro ao tomar decisão de compra/venda: {e}")
 
-    def realizar_operacao(self):
+    def get_acoes_disponiveis(self):
         try:
-            while True:
-                time.sleep(5)
-                if self.recebeu_acoes == True:
-                    if len(self.acoes) > 0:
-                        nome_acao = random.choice(list(self.acoes.keys()))
-                        operacao = random.choice(['compra', 'venda'])
-                        quantidade_maxima_para_compra = self.acoes[nome_acao]['quantidade']
-                        quantidade_maxima_para_venda = self.acoes_possuidas.get(nome_acao, 0)
-                        if operacao == 'compra' and quantidade_maxima_para_compra > 0:
-                            quantidade = random.randint(1, quantidade_maxima_para_compra)
-                            self.acoes_possuidas[nome_acao] = self.acoes_possuidas.get(nome_acao, 0) + quantidade
-                        elif operacao == 'venda' and quantidade_maxima_para_venda > 0:
-                            quantidade = random.randint(1, quantidade_maxima_para_venda)
-                            self.acoes_possuidas[nome_acao] -= quantidade
-                        else:
-                            continue
-                        pedido = f"{nome_acao},{operacao},{quantidade},robo{self.robo_id}"
-                        requests.post(f'http://{self.host}/hb{self.hb_id}', data=pedido)
-                        logger.info(VERDE + f"Pedido de {operacao} de {quantidade} {nome_acao} encaminhado ao HB{self.hb_id} com sucesso !" + RESET)
-                        self.solicita_lista()
-        except Exception as e:
-            logger.info(VERMELHO + f'Erro em \'realizar_operacao\' no Robo{self.robo_id}: {e}' + RESET)
-        
+            response = requests.get(f"{self.hb_url}/acoes")
+            response.raise_for_status()
+            acoes = response.json()
+            return acoes
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao obter a lista de ações disponíveis: {e}")
+            return {}
+
+    def realizar_compra(self, acao, quantidade):
+        try:
+            data = {'acao': acao, 'quantidade': quantidade}
+            response = requests.post(f"{self.hb_url}/comprar", json=data)
+            response.raise_for_status()
+            mensagem = response.json()['mensagem']
+            logger.info(mensagem)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao realizar compra de ação: {e}")
+
+    def realizar_venda(self, acao, quantidade):
+        try:
+            data = {'acao': acao, 'quantidade': quantidade}
+            response = requests.post(f"{self.hb_url}/vender", json=data)
+            response.raise_for_status()
+            mensagem = response.json()['mensagem']
+            logger.info(mensagem)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao realizar venda de ação: {e}")
 
 if __name__ == "__main__":
-    hb_id = sys.argv[1] if len(sys.argv) > 1 else '1'
-    robo_id = sys.argv[2] if len(sys.argv) > 2 else '1'
-    robo = Robo(hb_id=hb_id, robo_id=robo_id)
+    robo = Robo()
 
+    while True:
+        try:
+            robo.tomar_decisao_compra_venda()
+            time.sleep(1)  # Aguardar 1 segundo entre cada operação
+        except KeyboardInterrupt:
+            logger.info("Interrompido pelo usuário")
+            break
