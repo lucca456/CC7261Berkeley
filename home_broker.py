@@ -22,12 +22,14 @@ class HomeBroker:
         self.robo_id = 'robo1'
         self.acoes = {}
         self.relogio = time.time()
+        self.tempo_pedido = 0  # variável para armazenar o tempo de processamento do pedido
 
     def obter_hora_atual(self):
         self.relogio = time.time()
 
     def atualizar_hora(self, nova_hora):
         self.relogio = nova_hora
+        self.tempo_pedido = nova_hora  # atualizar o tempo do pedido com a nova hora
 
     def get_acoes(self):
         try:
@@ -118,9 +120,9 @@ def vender_acao():
 @app.route('/sincronizar', methods=['POST'])
 def sincronizar_relogio_hb():
     requisicao = request.get_json()
-    relogio_hb = requisicao.get('relogio')
-    # Atualize o relógio do HB com o valor recebido
-    return hb.atualizar_hora(relogio_hb)
+    nova_hora = requisicao.get('hora')  # Alteração do nome da variável para corresponder à nova estrutura
+    hb.atualizar_hora(nova_hora)  # Atualize o relógio do HB com o valor recebido
+    return ''
 
 @app.route('/atualizar_acoes', methods=['POST'])
 def atualizar_acoes():

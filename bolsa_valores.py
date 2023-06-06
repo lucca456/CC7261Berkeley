@@ -4,6 +4,8 @@ import threading
 from flask import Flask, request, jsonify
 import sys
 import requests
+import random
+
 
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger()
@@ -26,23 +28,30 @@ class BolsaDeValores:
             "A7": {'quantidade': 100, 'valor': 10},
             "A8": {'quantidade': 100, 'valor': 10}
         }
+        self.thread_relogio = threading.Thread(target=self.atualizar_relogio_continuamente)
+        self.thread_relogio.start()
+
+        self.hb_urls = ['localhost:8080', 'localhost:8081']
 
     def sincronizar_relogio(self):
         logger.info('Início da sincronização')
         hora_antes = time.time()
 
         # Obter a hora dos sistemas de HB
-        hora_hb1 = self.obter_hora_hb('localhost:8080')
-        hora_hb2 = self.obter_hora_hb('localhost:8081')
+        horas_hb = [self.obter_hora_hb(url) for url in self.hb_urls]
 
         # Sincronizar os relógios
-        self.relogio = (hora_hb1 + hora_hb2 + hora_antes) / 3
+        self.relogio = sum(horas_hb + [hora_antes]) / (len(horas_hb) + 1)
+
+        # Atualizar a hora nos sistemas HB
+        for url in self.hb_urls:
+            self.atualizar_hora_hb(url)
 
         hora_depois = time.time()
 
         logger.info(f'Hora antes da sincronização: {hora_antes}')
         logger.info(f'Hora depois da sincronização: {hora_depois}')
-        
+
     def obter_hora_hb(self, hb_url):
         try:
             response = requests.get(f"http://{hb_url}/hora")
@@ -61,6 +70,16 @@ class BolsaDeValores:
             logger.info(f"Hora atualizada no HB: {self.relogio}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Erro ao atualizar a hora do HB: {e}")
+
+    def atualizar_relogio(self):
+        ajuste = random.uniform(-2, 2)  # Gera um número aleatório entre -2 e 2
+        self.relogio += ajuste
+        logger.info(f"Relógio atualizado. Ajuste: {ajuste} - Relógio BV: {self.relogio}")
+    
+    def atualizar_relogio_continuamente(self):
+        while True:
+            self.atualizar_relogio()
+            time.sleep(10)  # Aguardar 10 segundos antes de atualizar novamente
 
 bolsa = BolsaDeValores()
 
